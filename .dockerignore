@@ -1,5 +1,6 @@
 __pycache__
 .DS_Store
 .idea/
-roulette_vm_key.pem
+blackjack_vm_key.pem
 .env
+old

@@ -8,9 +8,9 @@ DB_PASSWORD = os.getenv('DB_PASSWORD')
 
 # Database connection configuration (DON'T PUSH PASSWORD TO DOCKERHUB)
 db_config = {
-    'user': 'admin',
-    'password': DB_PASSWORD,
-    'host': 'cloudproject.crimg8c22499.us-east-2.rds.amazonaws.com',
+    'user': 'root',
+    'password': 'dbuserdbuser',
+    'host': 'localhost',
     'database': 'roulette',
 }
 
