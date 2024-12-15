@@ -1,10 +1,30 @@
 # app/routers/game_history.py
+from email.header import Header
 
-from fastapi import APIRouter, HTTPException, Request, Query, Response, status
+from fastapi import APIRouter, HTTPException, Request, Query, Response, \
+    status, Header
 from app.resources import GameHistoryResource
 from app.models import GameHistory, Page, Link
+import jwt
+import os
+from dotenv import load_dotenv
+import boto3
+import json
+
+ALGORITHM = "HS256"
+
+load_dotenv()
+SECRET_KEY = os.getenv("SECRET_KEY")
 router = APIRouter()
 game_history_resource = GameHistoryResource()
+
+sns_client = boto3.client("sns", region_name="us-east-1")
+SNS_TOPIC_ARN = "arn:aws:sns:us-east-1:920373012265:game"
+
+
+# sts_client = boto3.client("sts")
+# identity = sts_client.get_caller_identity()
+# print(identity)
 
 @router.get("/game_history/{game_id}", response_model=GameHistory)
 def get_game_by_id(game_id: int, request: Request):
@@ -54,6 +74,26 @@ def create_game_history(game_history: GameHistory, request: Request,
     new_id = game_history_resource.create(game_history)
     location_url = request.url_for("get_game_by_id", game_id=new_id)
     response.headers["Location"] = str(location_url)
+
+    # Step 2: Publish the event to SNS
+    try:
+        # Prepare the message payload
+        event_message = {
+            "game_id": new_id,
+            "player": game_history.username,
+            "outcome": game_history.result,
+        }
+
+        # Publish the message to SNS
+        sns_client.publish(
+            TopicArn=SNS_TOPIC_ARN,
+            Message=json.dumps(event_message),
+            Subject="New Game Event",
+        )
+        print(f"Published event to SNS: {event_message}")
+    except Exception as e:
+        print(f"Error publishing to SNS: {e}")
+
     return {"message": "Game history created successfully"}
 
 # Composite must ensure other name exists in user stats if name change here
@@ -67,7 +107,10 @@ def update_game_history(game_id: int, game_history: GameHistory):
 
 # Must make sure we decrement user stats accordingly in composite
 @router.delete("/game_history/{game_id}")
-def delete_game_history(game_id: int):
+def delete_game_history(game_id: int, auth: str = Header(...)):
+    payload = jwt.decode(auth, SECRET_KEY, algorithms=[ALGORITHM])
+    if "access_game_records" not in payload.get("permissions", []):
+        raise HTTPException(status_code=403, detail="Permission denied")
     result = game_history_resource.delete(game_id)
     if result:
         return {"message": "Game history updated successfully"}
